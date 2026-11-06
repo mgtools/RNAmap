@@ -12,14 +12,16 @@ Pairs are kept from p >= 1e-3 (ERNIE-RNA: 2e-3, and only |i - j| >= 4). These ar
 external PDB test set; on bpRNA they reproduce the benchmark maps exactly except RibonanzaNet-SS, whose MultiMolecule
 port changes bpRNA-new F-values by less than 0.001. ERNIE-RNA reads at most 1,022 nt.
 
-`find_tools` locates CONTRAfold, EternaFold and EternaFold's parameters: an explicit path, else $CONTRAFOLD,
-$ETERNAFOLD and $ETERNAFOLD_PARAMS, else the `contrafold` and `eternafold` commands on the PATH (as the conda
-environment of `environment.yml` installs them) and the parameters bioconda's `eternafold` ships.
+`folding_tools` locates CONTRAfold, EternaFold and EternaFold's parameters: an explicit path, else $CONTRAFOLD,
+$ETERNAFOLD (or bioconda's $ETERNAFOLD_PATH) and $ETERNAFOLD_PARAMS (or $ETERNAFOLD_PARAMETERS), else the `contrafold`
+and `eternafold` commands of this Python's environment or the PATH (as the conda environment of `environment.yml`
+installs them) and the parameters bioconda's `eternafold` ships.
 """
 
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
@@ -102,26 +104,51 @@ def clean(seq: str) -> str:
     return s
 
 
-def find_tools(contrafold_bin: str | None = None, eternafold_bin: str | None = None,
-               eternafold_params: str | None = None) -> tuple[str, str, str]:  # fmt: skip
-    """(CONTRAfold binary, EternaFold binary, EternaFold parameters), or a SystemExit naming what is missing."""
-    cf = contrafold_bin or os.environ.get("CONTRAFOLD") or shutil.which("contrafold")
-    ef = eternafold_bin or os.environ.get("ETERNAFOLD") or shutil.which("eternafold")
-    params = eternafold_params or os.environ.get("ETERNAFOLD_PARAMS")
-    if not params and ef:  # bioconda: <env>/bin/eternafold and <env>/lib/eternafold-lib/parameters/
-        p = Path(ef).absolute().parent.parent / "lib" / "eternafold-lib" / "parameters" / "EternaFoldParams.v1"
-        params = str(p) if p.exists() else None
-    missing = [n for n, v in (("CONTRAfold", cf), ("EternaFold", ef), ("EternaFold parameters", params)) if not v]
+ETERNAFOLD_PARAMS = Path("lib", "eternafold-lib", "parameters", "EternaFoldParams.v1")  # under bioconda's env prefix
+
+
+def _given(explicit: str | None, *variables: str) -> str | None:
+    """An explicit path, else the first environment variable that is set."""
+    return explicit or next((os.environ[v] for v in variables if os.environ.get(v)), None)
+
+
+def _command(name: str) -> str | None:
+    """`name` in this Python's environment (a conda env run without activating it), else on the PATH."""
+    return shutil.which(name, path=os.path.join(sys.prefix, "bin")) or shutil.which(name)
+
+
+def folding_tools(contrafold_bin: str | None = None, eternafold_bin: str | None = None,
+                  eternafold_params: str | None = None) -> tuple[str, str, str]:  # fmt: skip
+    """(CONTRAfold binary, EternaFold binary, EternaFold parameters), or a SystemExit naming what is missing.
+
+    A path given explicitly or by an environment variable must exist: it never falls back to automatic discovery.
+    """
+    cf_given = _given(contrafold_bin, "CONTRAFOLD")
+    ef_given = _given(eternafold_bin, "ETERNAFOLD", "ETERNAFOLD_PATH")
+    params_given = _given(eternafold_params, "ETERNAFOLD_PARAMS", "ETERNAFOLD_PARAMETERS")
+    cf = shutil.which(cf_given) if cf_given else _command("contrafold")
+    ef = shutil.which(ef_given) if ef_given else _command("eternafold")
+    if params_given:
+        params = params_given if Path(params_given).is_file() else None
+    else:  # bioconda: <env>/bin/eternafold and <env>/lib/eternafold-lib/parameters/
+        beside = [Path(ef).absolute().parent.parent / ETERNAFOLD_PARAMS] if ef else []
+        params = next((str(p) for p in [*beside, Path(sys.prefix) / ETERNAFOLD_PARAMS] if p.is_file()), None)
+    tools = (
+        ("CONTRAfold", cf_given, cf),
+        ("EternaFold", ef_given, ef),
+        ("EternaFold parameters", params_given, params),
+    )
+    missing = [f"{name} (not found at {given})" if given else name for name, given, found in tools if not found]
     if missing:
-        raise SystemExit(f"{', '.join(missing)} not found. Create the conda environment of environment.yml, which "
-                         "installs them, or pass --contrafold, --eternafold and --eternafold-params.")  # fmt: skip
+        raise SystemExit(f"Missing folding tools: {', '.join(missing)}. Install them with `conda env create -f "
+                         "environment.yml`, or pass --contrafold, --eternafold and --eternafold-params.")  # fmt: skip
     return cf, ef, params
 
 
 def featurize(ids: list[str], seqs: list[str], contrafold_bin: str | None = None, eternafold_bin: str | None = None,
               eternafold_params: str | None = None, device: str = "cpu", workers: int = 4) -> Maps:  # fmt: skip
     """The five maps of each sequence, packed in the benchmark format."""
-    contrafold_bin, eternafold_bin, eternafold_params = find_tools(contrafold_bin, eternafold_bin, eternafold_params)
+    contrafold_bin, eternafold_bin, eternafold_params = folding_tools(contrafold_bin, eternafold_bin, eternafold_params)
     seqs = [clean(s) for s in seqs]
     too_long = [i for i, s in zip(ids, seqs, strict=True) if len(s) > MAX_LEN]
     if too_long:

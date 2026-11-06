@@ -171,10 +171,14 @@ def main(argv=None) -> None:
     p.add_argument("fasta")
     p.add_argument("--out", required=True, help="output prefix: writes <out>.npz and <out>.tsv")
     p.add_argument("--contrafold", help="CONTRAfold 2.02 binary (default: $CONTRAFOLD, else `contrafold` on the PATH)")
-    p.add_argument("--eternafold", help="EternaFold binary (default: $ETERNAFOLD, else `eternafold` on the PATH)")
+    p.add_argument(
+        "--eternafold",
+        help="EternaFold binary (default: $ETERNAFOLD or $ETERNAFOLD_PATH, else `eternafold` on the PATH)",
+    )
     p.add_argument(
         "--eternafold-params",
-        help="EternaFoldParams.v1 (default: $ETERNAFOLD_PARAMS, else the one bioconda's eternafold ships)",
+        help="EternaFoldParams.v1 (default: $ETERNAFOLD_PARAMS or $ETERNAFOLD_PARAMETERS, else the one bioconda's "
+        "eternafold ships)",
     )
     p.add_argument("--device", default="cpu", help="device for RibonanzaNet-SS and ERNIE-RNA")
     p.add_argument("--workers", type=int, default=4, help="processes for RNAfold, CONTRAfold and EternaFold")
