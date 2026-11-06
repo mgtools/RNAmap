@@ -1,0 +1,13 @@
+# Everything rnamap needs, including the folding programs that pip cannot install:
+#   conda env create -f environment.yml && conda activate rnamap
+name: rnamap
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - pip
+  - contrafold=2.02 # CONTRAfold map
+  - eternafold=1.3.1 # EternaFold map, with its parameters
+  - pip:
+      - -e . # rnamap and its Python dependencies (pyproject.toml)

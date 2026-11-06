@@ -1,0 +1,48 @@
+[project]
+name = "rnamap"
+version = "1.0.0"
+description = "ncRNA representations from multi-channel base-pairing maps: inference for the four RNAmap tasks"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "numba>=0.59",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scikit-learn>=1.3",
+    "scipy>=1.11",
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "ViennaRNA>=2.6",  # RNAfold map
+    "multimolecule>=0.2.3",  # RibonanzaNet-SS and ERNIE-RNA maps
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+rnamap = "rnamap.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["rnamap"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "NPY", # NumPy-specific rules
+]
+# The formatter already wraps at line-length; E501 only fires on what it cannot split.
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
